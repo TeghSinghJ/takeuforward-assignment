@@ -2,16 +2,20 @@ const express = require('express');
 const mysql = require('mysql');
 const axios = require('axios');
 const cors = require('cors');
-
+require('dotenv').config(); 
 const app = express();
 const port = process.env.PORT || 5000;
+const dbHost = process.env.DB_HOST;
+const dbUser = process.env.DB_USER;
+const dbPassword = process.env.DB_PASSWORD;
+const dbName = process.env.DB_NAME;
 
 // Database connection
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'tuf_assign'
+  host: dbHost,
+  user: dbUser,
+  password: dbPassword,
+  database: dbName
 });
 
 // Create table if it doesn't exist
