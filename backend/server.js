@@ -1,6 +1,6 @@
 // Import required modules
 const express = require('express');
-const mysql = require('mysql');
+const mysql = require('mysql2');
 const axios = require('axios');
 const cors = require('cors');
 require('dotenv').config(); 
