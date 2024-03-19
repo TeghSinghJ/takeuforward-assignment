@@ -1,12 +1,23 @@
+// Import required modules
+const express = require('express');
 const mysql = require('mysql');
 const axios = require('axios');
+const cors = require('cors');
+require('dotenv').config(); 
 
+// Create Express app
+const app = express();
+
+// Set up middleware
+app.use(cors());
+app.use(express.json()); 
+
+// Configure MySQL database connection
 const dbHost = process.env.DB_HOST;
 const dbUser = process.env.DB_USER;
 const dbPassword = process.env.DB_PASSWORD;
 const dbName = process.env.DB_NAME;
 
-// Database connection
 const db = mysql.createPool({
   connectionLimit: 10,
   host: dbHost,
@@ -41,23 +52,25 @@ db.getConnection((err, connection) => {
   });
 });
 
-// Routes
-module.exports = (req, res) => {
-  if (req.method === 'GET') {
-    const sql = 'SELECT username, language, stdin, LEFT(source_code, 100) AS source_code, stdout, timestamp FROM code_snippets';
-    db.query(sql, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: 'Internal Server Error' });
-        return;
-      }
-      res.json(result);
-    });
-  } else if (req.method === 'POST') {
-    const { username, language, stdin, sourceCode } = req.body;
+// Define routes
+app.get('/api/entries', (req, res) => {
+  const sql = 'SELECT username, language, stdin, LEFT(source_code, 100) AS source_code, stdout, timestamp FROM code_snippets';
+  db.query(sql, (err, result) => {
+    if (err) {
+      res.status(500).json({ error: 'Internal Server Error' });
+      return;
+    }
+    res.json(result);
+  });
+});
 
-    // Execute the code and get the stdout response
-    let stdout;
-    axios.post("https://onecompiler-apis.p.rapidapi.com/api/v1/run", {
+app.post('/api/submit', async (req, res) => {
+  const { username, language, stdin, sourceCode } = req.body;
+
+  // Execute the code and get the stdout response
+  let stdout;
+  try {
+    const response = await axios.post("https://onecompiler-apis.p.rapidapi.com/api/v1/run", {
       language: language,
       stdin: stdin,
       files: [
@@ -72,23 +85,26 @@ module.exports = (req, res) => {
         "X-RapidAPI-Key": "1f1e610597msh6c9a2f4c94654f0p10feccjsn3feb141e5fb5",
         "X-RapidAPI-Host": "onecompiler-apis.p.rapidapi.com",
       }
-    })    .then(response => {
-      stdout = response.data.stdout;
-      const sql = 'INSERT INTO code_snippets (username, language, stdin, source_code, stdout) VALUES (?, ?, ?, ?, ?)';
-      db.query(sql, [username, language, stdin, sourceCode, stdout], (err) => {
-        if (err) {
-          console.error(err);
-          res.status(500).json({ error: 'Internal Server Error' });
-          return;
-        }
-        res.status(200).send('Code snippet submitted successfully');
-      });
-    })
-    .catch(error => {
-      console.error(error);
-      res.status(500).json({ error: 'Internal Server Error' });
     });
-  } else {
-    res.status(405).send('Method Not Allowed');
+    stdout = response.data.stdout;
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
-};
+
+  // Store the form data and stdout in the database
+  const sql = 'INSERT INTO code_snippets (username, language, stdin, source_code, stdout) VALUES (?, ?, ?, ?, ?)';
+  db.query(sql, [username, language, stdin, sourceCode, stdout], (err) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+    res.send('Code snippet submitted successfully');
+  });
+});
+
+// Start server
+const port = process.env.PORT || 5000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
